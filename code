@@ -1,0 +1,85 @@
+import tensorflow as tf
+import os
+import numpy as np
+from sklearn.metrics import classification_report
+
+# Set paths for the dataset and the training/validation sets
+original_dataset_dir = 'D:\boston'
+train_dir = 'D:\boston'
+validation_dir = 'D:\boston'
+
+# Create the training and validation directories
+train_weed_dir = os.path.join(train_dir, 'weed')
+os.makedirs(train_weed_dir, exist_ok=True)
+val_weed_dir = os.path.join(validation_dir, 'weed')
+os.makedirs(val_weed_dir, exist_ok=True)
+
+train_nonweed_dir = os.path.join(train_dir, 'nonweed')
+os.makedirs(train_nonweed_dir, exist_ok=True)
+val_nonweed_dir = os.path.join(validation_dir, 'nonweed')
+os.makedirs(val_nonweed_dir, exist_ok=True)
+
+train_other_dir = os.path.join(train_dir, 'other')
+os.makedirs(train_other_dir, exist_ok=True)
+val_other_dir = os.path.join(validation_dir, 'other')
+os.makedirs(val_other_dir, exist_ok=True)
+
+# Split the dataset into training and validation sets
+for cls in ['weed', 'nonweed', 'other']:
+    source_dir = os.path.join(original_dataset_dir, cls)
+    files = os.listdir(source_dir)
+    np.random.shuffle(files)
+    split = int(0.8 * len(files))
+    train_files = files[:split]
+    val_files = files[split:]
+
+    for file in train_files:
+        src = os.path.join(source_dir, file)
+        dst = os.path.join(train_dir, cls, file)
+        os.symlink(src, dst)
+
+    for file in val_files:
+        src = os.path.join(source_dir, file)
+        dst = os.path.join(validation_dir, cls, file)
+        os.symlink(src, dst)
+
+# Define the CNN architecture
+model = tf.keras.models.Sequential([
+    tf.keras.layers.Conv2D(32, (3,3), activation='relu', input_shape=(224,224,3)),
+    tf.keras.layers.MaxPooling2D(2,2),
+    tf.keras.layers.Conv2D(64, (3,3), activation='relu'),
+    tf.keras.layers.MaxPooling2D(2,2),
+    tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
+    tf.keras.layers.MaxPooling2D(2,2),
+    tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
+    tf.keras.layers.MaxPooling2D(2,2),
+    tf.keras.layers.Flatten(),
+    tf.keras.layers.Dense(512, activation='relu'),
+    tf.keras.layers.Dense(3, activation='softmax')
+])
+
+# Compile the model
+model.compile(loss='categorical_crossentropy',
+              optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+              metrics=['accuracy'])
+
+# Set the batch size and number of epochs
+batch_size = 32
+epochs = 10
+
+# Use the ImageDataGenerator to load the training and validation sets
+train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(
+    rescale=1./255,
+    rotation_range=40,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True,
+    fill_mode='nearest'
+)
+
+validation_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=1./255)
+
+train_data = train_datagen.flow_from_directory(train_dir, target_size=(224,224),
+                                               batch_size=batch_size, class_mode='categorical')
